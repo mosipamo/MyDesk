@@ -1,4 +1,4 @@
-# Personal Workspace
+# MyDesk
 
 A minimal Notion-style app for yourself: pen/pressure drawing canvas, todo list,
 markdown notes, and a calendar. FastAPI backend (SQLite, one file, zero config),

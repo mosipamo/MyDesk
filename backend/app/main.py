@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import init_db
 from .routers import notes, todos, events, drawings
 
-app = FastAPI(title="Personal Workspace API")
+app = FastAPI(title="MyDesk API")
 
 app.add_middleware(
     CORSMiddleware,
