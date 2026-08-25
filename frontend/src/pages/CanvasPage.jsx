@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Trash2, Save, FilePlus2, Undo2, Eraser, Pencil } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Trash2, Save, FilePlus2, Undo2, Eraser, Pencil, RefreshCw } from "lucide-react";
 import { api } from "../api.js";
 
 const COLORS = ["#23262b", "#1f6f5c", "#b94a3f", "#d9a32c", "#3a5a9b"];
@@ -38,6 +38,32 @@ function paintStrokes(ctx, strokes, width, height) {
   ctx.globalCompositeOperation = "source-over";
 }
 
+function parseStrokes(raw) {
+  try {
+    const data = JSON.parse(raw || "[]");
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function DrawingThumb({ raw }) {
+  const ref = useRef(null);
+  const strokes = useMemo(() => parseStrokes(raw), [raw]);
+
+  useEffect(() => {
+    const c = ref.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    const scale = Math.min(c.width / 760, c.height / 520);
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    paintStrokes(ctx, strokes, 760, 520);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }, [strokes]);
+
+  return <canvas ref={ref} width={206} height={140} aria-hidden="true" />;
+}
+
 export default function CanvasPage() {
   const canvasRef = useRef(null);
   const [drawings, setDrawings] = useState([]);
@@ -52,7 +78,7 @@ export default function CanvasPage() {
   const cursorRef = useRef(null);
   const dims = { width: 760, height: 520 };
   const effectiveSize = tool === "eraser" ? size * 3 : size;
-  const cursorDiameter = Math.max(4, effectiveSize * 1.6); // matches the max stroke width at full pressure
+  const cursorDiameter = Math.max(4, effectiveSize * 1.6);
 
   // Moves the tool-size indicator with the pointer via direct DOM writes
   // (not React state) so hovering/dragging stays smooth at high event rates.
@@ -86,7 +112,7 @@ export default function CanvasPage() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     paintStrokes(ctx, strokes, dims.width, dims.height);
-  }, [strokes]);
+  }, [strokes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function getPos(e) {
     const canvas = canvasRef.current;
@@ -198,10 +224,10 @@ export default function CanvasPage() {
   }
 
   async function loadDrawing(d) {
-    const full = await api.getDrawing(d.id);
+    const full = drawings.find((x) => x.id === d.id) ?? (await api.getDrawing(d.id));
     setCurrentId(full.id);
     setTitle(full.title);
-    setStrokes(JSON.parse(full.strokes || "[]"));
+    setStrokes(parseStrokes(full.strokes));
   }
 
   async function save() {
@@ -224,123 +250,151 @@ export default function CanvasPage() {
 
   async function removeDrawing(id, e) {
     e.stopPropagation();
+    if (!window.confirm("Delete this drawing? This cannot be undone.")) return;
     await api.deleteDrawing(id);
     if (id === currentId) startNew();
     refreshList();
   }
 
+  // Latest-action refs so the Ctrl+S / Ctrl+Z handlers below always call
+  // the current closures without re-binding the listener on every render.
+  const saveRef = useRef(save);
+  const undoRef = useRef(undo);
+  saveRef.current = save;
+  undoRef.current = undo;
+
+  useEffect(() => {
+    function onKey(e) {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === "s") {
+        e.preventDefault();
+        saveRef.current();
+      } else if (key === "z" && !e.shiftKey) {
+        if (e.target.closest?.("input, textarea, select")) return;
+        e.preventDefault();
+        undoRef.current();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div>
-      <div className="page-header">Pen</div>
-      <h1 className="page-title">Canvas</h1>
+      <div className="page-header">Sketch</div>
+      <div className="page-title-row">
+        <div>
+          <h1 className="page-title">Canvas</h1>
+          <p className="page-sub">
+            Pressure-sensitive drawing. Save with <kbd>Ctrl S</kbd>, undo with{" "}
+            <kbd>Ctrl Z</kbd>.
+          </p>
+        </div>
+      </div>
 
-      <div style={{ display: "flex", gap: 24 }}>
-        <div style={{ flex: 1 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              marginBottom: 14,
-              flexWrap: "wrap",
-            }}
-          >
+      <div className="canvas-layout">
+        <div className="canvas-main">
+          <div className="canvas-toolbar">
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              style={{ width: 220 }}
+              style={{ width: 200 }}
+              aria-label="Drawing title"
             />
-            <button
-              className="btn btn-icon"
-              onClick={() => setTool("pen")}
-              title="Pen"
-              style={
-                tool === "pen"
-                  ? {
-                      borderColor: "var(--accent)",
-                      background: "var(--accent-soft)",
-                    }
-                  : undefined
-              }
-            >
-              <Pencil size={16} />
-            </button>
-            <button
-              className="btn btn-icon"
-              onClick={() => setTool("eraser")}
-              title="Eraser"
-              style={
-                tool === "eraser"
-                  ? {
-                      borderColor: "var(--accent)",
-                      background: "var(--accent-soft)",
-                    }
-                  : undefined
-              }
-            >
-              <Eraser size={16} />
-            </button>
+
+            <div className="tool-divider" />
+
+            <div className="tool-seg" role="group" aria-label="Tool">
+              <button
+                type="button"
+                className={tool === "pen" ? "active" : ""}
+                onClick={() => setTool("pen")}
+                title="Pen"
+                aria-pressed={tool === "pen"}
+              >
+                <Pencil size={16} />
+              </button>
+              <button
+                type="button"
+                className={tool === "eraser" ? "active" : ""}
+                onClick={() => setTool("eraser")}
+                title="Eraser"
+                aria-pressed={tool === "eraser"}
+              >
+                <Eraser size={16} />
+              </button>
+            </div>
+
+            <div className="tool-divider" />
+
             {COLORS.map((c) => (
               <button
                 key={c}
+                type="button"
                 onClick={() => setColor(c)}
                 aria-label={`Color ${c}`}
+                aria-pressed={color === c}
+                className={`swatch${color === c ? " active" : ""}`}
                 style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: "50%",
                   background: c,
-                  border:
-                    color === c
-                      ? "2px solid var(--ink)"
-                      : "1px solid var(--line)",
-                  padding: 0,
+                  boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
+                  border: "none",
                 }}
               />
             ))}
-            <input
-              type="range"
-              min="1"
-              max="12"
-              value={size}
-              onChange={(e) => setSize(Number(e.target.value))}
-              style={{ width: 100 }}
-            />
-            <button
-              className="btn btn-icon"
-              onClick={undo}
-              title="Undo last stroke"
-            >
+
+            <div className="tool-divider" />
+
+            <div className="size-wrap">
+              <input
+                type="range"
+                min="1"
+                max="12"
+                value={size}
+                onChange={(e) => setSize(Number(e.target.value))}
+                style={{ width: 90 }}
+                aria-label="Brush size"
+              />
+              <span
+                className="size-dot"
+                style={{
+                  width: Math.min(20, Math.max(4, size * 1.6)),
+                  height: Math.min(20, Math.max(4, size * 1.6)),
+                  opacity: 0.75,
+                }}
+              />
+            </div>
+
+            <div className="tool-divider" />
+
+            <button type="button" className="btn btn-icon btn-ghost" onClick={undo} title="Undo last stroke (Ctrl+Z)">
               <Undo2 size={16} />
             </button>
-            <button
-              className="btn btn-icon"
-              onClick={clearCanvas}
-              title="Clear canvas"
-            >
+            <button type="button" className="btn btn-icon btn-ghost" onClick={clearCanvas} title="Clear canvas">
               <Trash2 size={16} />
             </button>
-            <button
-              className="btn btn-icon"
-              onClick={startNew}
-              title="New drawing"
-            >
+            <button type="button" className="btn btn-icon btn-ghost" onClick={startNew} title="New drawing">
               <FilePlus2 size={16} />
             </button>
+
             <button
+              type="button"
               className="btn btn-primary"
               onClick={save}
               disabled={saving}
+              style={{ marginLeft: "auto" }}
             >
-              <Save size={16} />
+              {saving ? <RefreshCw className="spin" size={15} /> : <Save size={16} />}
               {saving ? "Saving…" : "Save"}
             </button>
           </div>
 
           <div
+            className="canvas-board"
             style={{
-              position: "relative",
               width: dims.width,
               height: dims.height,
             }}
@@ -384,55 +438,41 @@ export default function CanvasPage() {
               }}
             />
           </div>
-          <p
-            style={{ color: "var(--ink-faint)", fontSize: 12.5, marginTop: 8 }}
-          >
-            Works with a pressure-sensitive pen/stylus, or mouse and touch as a
-            fallback.
+          <p className="canvas-hint">
+            Works with a pressure-sensitive pen/stylus, or mouse and touch as a fallback.
           </p>
         </div>
 
-        <div style={{ width: 220, flexShrink: 0 }}>
-          <div className="page-header">Saved</div>
-          {drawings.length === 0 && (
-            <p style={{ color: "var(--ink-faint)", fontSize: 13.5 }}>
-              No drawings yet.
-            </p>
-          )}
-          {drawings.map((d) => (
+        <div className="drawing-list">
+          <div className="page-header" style={{ marginBottom: 2 }}>
+            Saved ({drawings.length})
+          </div>
+          {drawings.map((d, i) => (
             <div
               key={d.id}
               onClick={() => loadDrawing(d)}
-              className="card"
-              style={{
-                padding: "10px 12px",
-                marginBottom: 8,
-                cursor: "pointer",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                borderColor:
-                  d.id === currentId ? "var(--accent)" : "var(--line)",
-              }}
+              className={`drawing-card${d.id === currentId ? " active" : ""}`}
+              style={{ animationDelay: `${Math.min(i * 0.05, 0.35)}s` }}
             >
-              <span
-                style={{
-                  fontSize: 13.5,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {d.title}
-              </span>
-              <button
-                className="btn btn-icon"
-                onClick={(e) => removeDrawing(d.id, e)}
-                style={{ border: "none", background: "transparent" }}
-              >
-                <Trash2 size={14} />
-              </button>
+              <DrawingThumb raw={d.strokes} />
+              <div className="drawing-card-meta">
+                <span className="drawing-card-title">{d.title}</span>
+                <button
+                  type="button"
+                  className="delete-inline"
+                  aria-label={`Delete ${d.title}`}
+                  onClick={(e) => removeDrawing(d.id, e)}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
+          {drawings.length === 0 && (
+            <p style={{ color: "var(--muted)", fontSize: 13.5, margin: 0 }}>
+              Nothing saved yet — sketch something and hit Save.
+            </p>
+          )}
         </div>
       </div>
     </div>
