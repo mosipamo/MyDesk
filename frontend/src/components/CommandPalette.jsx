@@ -1,7 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { PenLine, ListTodo, FileText, CalendarDays, Search, CornerDownLeft } from "lucide-react";
+import {
+  PenLine,
+  ListTodo,
+  FileText,
+  CalendarDays,
+  Search,
+  CornerDownLeft,
+  Compass,
+} from "lucide-react";
 import { api } from "../api.js";
+
+const GROUP_ICONS = {
+  Pages: Compass,
+  Notes: FileText,
+  Todos: ListTodo,
+  Events: CalendarDays,
+};
 
 const PAGE_ITEMS = [
   { key: "page-canvas", group: "Pages", label: "Canvas", sub: "Drawing board", to: "/" },
@@ -168,30 +183,38 @@ export default function CommandPalette() {
           {flat.length === 0 && (
             <div className="cmdk-empty">No matches for “{query.trim()}”</div>
           )}
-          {groups.map((group) => (
-            <div key={group.name}>
-              <div className="cmdk-group-label">{group.name}</div>
-              {group.items.map((item) => {
-                flatIdx += 1;
-                const idx = flatIdx;
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={`cmdk-item${idx === activeIndex ? " active" : ""}`}
-                    data-active={idx === activeIndex}
-                    onMouseEnter={() => setActiveIndex(idx)}
-                    onClick={() => runItem(item)}
-                  >
-                    <span className="cmdk-item-label">
-                      {highlight(item.label, query)}
-                    </span>
-                    {item.sub && <span className="cmdk-item-sub">{item.sub}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+          {groups.map((group) => {
+            const GroupIcon = GROUP_ICONS[group.name];
+            return (
+              <div key={group.name}>
+                <div className="cmdk-group-label">
+                  {GroupIcon && <GroupIcon size={12} />}
+                  {group.name}
+                </div>
+                {group.items.map((item) => {
+                  flatIdx += 1;
+                  const idx = flatIdx;
+                  const isActive = idx === activeIndex;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`cmdk-item${isActive ? " active" : ""}`}
+                      data-active={isActive}
+                      onMouseEnter={() => setActiveIndex(idx)}
+                      onClick={() => runItem(item)}
+                    >
+                      {isActive && <CornerDownLeft size={14} />}
+                      <span className="cmdk-item-label">
+                        {highlight(item.label, query)}
+                      </span>
+                      {item.sub && <span className="cmdk-item-sub">{item.sub}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
 
         <div className="cmdk-footer">
