@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   startOfMonth,
@@ -12,18 +12,20 @@ import {
   addMonths,
   subMonths,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2, CalendarPlus } from "lucide-react";
 import { api } from "../api.js";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function CalendarPage() {
   const [cursor, setCursor] = useState(new Date());
+  const [direction, setDirection] = useState(null); // "prev" | "next"
   const [events, setEvents] = useState([]);
   const [todos, setTodos] = useState([]);
   const [selectedDay, setSelectedDay] = useState(new Date());
   const [newTitle, setNewTitle] = useState("");
   const [searchParams] = useSearchParams();
+  const inputRef = useRef(null);
 
   useEffect(() => {
     const requestedDate = searchParams.get("date");
@@ -50,6 +52,11 @@ export default function CalendarPage() {
 
   useEffect(refresh, [cursor]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  function goMonth(fn) {
+    setDirection(fn === addMonths ? "next" : "prev");
+    setCursor((c) => fn(c, 1));
+  }
+
   function itemsFor(day) {
     const key = format(day, "yyyy-MM-dd");
     return [
@@ -58,7 +65,13 @@ export default function CalendarPage() {
         .map((e) => ({ kind: "event", id: `ev-${e.id}`, title: e.title })),
       ...todos
         .filter((t) => t.due_date === key)
-        .map((t) => ({ kind: "todo", id: `td-${t.id}`, title: t.text, done: t.done })),
+        .map((t) => ({
+          kind: "todo",
+          id: `td-${t.id}`,
+          title: t.text,
+          done: t.done,
+          priority: t.priority,
+        })),
     ];
   }
 
@@ -75,6 +88,7 @@ export default function CalendarPage() {
   }
 
   async function removeEvent(id) {
+    if (!window.confirm("Delete this event?")) return;
     await api.deleteEvent(id);
     refresh();
   }
@@ -89,102 +103,176 @@ export default function CalendarPage() {
     await api.updateTodo(todo.id, { done: !todo.done });
     refresh();
   }
+
   return (
     <div>
       <div className="page-header">Schedule</div>
-      <h1 className="page-title">Calendar</h1>
+      <div className="page-title-row">
+        <div>
+          <h1 className="page-title">Calendar</h1>
+          <p className="page-sub">Events and task due dates, side by side.</p>
+        </div>
+      </div>
 
-      <div style={{ display: "flex", gap: 28 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <button className="btn btn-icon" onClick={() => setCursor((c) => subMonths(c, 1))}>
+      <div style={{ display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 480 }}>
+          <div className="calendar-toolbar">
+            <button
+              type="button"
+              className="btn btn-icon"
+              onClick={() => goMonth(subMonths)}
+              aria-label="Previous month"
+            >
               <ChevronLeft size={16} />
             </button>
-            <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 15, width: 150, textAlign: "center" }}>
-              {format(cursor, "MMMM yyyy")}
-            </div>
-            <button className="btn btn-icon" onClick={() => setCursor((c) => addMonths(c, 1))}>
+            <div className="calendar-month-label">{format(cursor, "MMMM yyyy")}</div>
+            <button
+              type="button"
+              className="btn btn-icon"
+              onClick={() => goMonth(addMonths)}
+              aria-label="Next month"
+            >
               <ChevronRight size={16} />
             </button>
-            <button className="btn" onClick={() => { setCursor(new Date()); setSelectedDay(new Date()); }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                setCursor(new Date());
+                setSelectedDay(new Date());
+                setDirection(null);
+              }}
+            >
               Today
             </button>
           </div>
 
-          <div className="calendar-grid">
-            {DOW.map((d) => (
-              <div key={d} className="calendar-dow">{d}</div>
-            ))}
-            {days.map((day) => {
-              const items = itemsFor(day);
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={`calendar-cell${!isSameMonth(day, cursor) ? " outside" : ""}${isSameDay(day, new Date()) ? " today" : ""}`}
-                  style={isSameDay(day, selectedDay) ? { outline: "2px solid var(--accent)" } : undefined}
-                  onClick={() => setSelectedDay(day)}
-                >
-                  <div className="calendar-daynum">{format(day, "d")}</div>
-                  {items.slice(0, 3).map((item) =>
-                    item.kind === "event" ? (
-                      <div key={item.id} className="calendar-event-pill">{item.title}</div>
-                    ) : (
-                      <div key={item.id} className={`calendar-todo-pill${item.done ? " done" : ""}`}>
-                        {item.title}
-                      </div>
-                    )
-                  )}
-                  {items.length > 3 && (
-                    <div className="calendar-more">+{items.length - 3} more</div>
-                  )}
+          <div className="calendar-frame">
+            <div
+              key={format(cursor, "yyyy-MM")}
+              className={`calendar-grid${
+                direction ? ` slide-in-${direction}` : ""
+              }`}
+            >
+              {DOW.map((d) => (
+                <div key={d} className="calendar-dow">
+                  {d}
                 </div>
-              );
-            })}
+              ))}
+              {days.map((day) => {
+                const items = itemsFor(day);
+                const isToday = isSameDay(day, new Date());
+                const isSelected = isSameDay(day, selectedDay);
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={[
+                      "calendar-cell",
+                      !isSameMonth(day, cursor) ? "outside" : "",
+                      isSelected ? "selected" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() => setSelectedDay(day)}
+                  >
+                    <div className="calendar-daynum">
+                      {isToday && <span className="today-dot" />}
+                      {format(day, "d")}
+                    </div>
+                    {items.slice(0, 3).map((item) =>
+                      item.kind === "event" ? (
+                        <div key={item.id} className="calendar-event-pill">
+                          {item.title}
+                        </div>
+                      ) : (
+                        <div
+                          key={item.id}
+                          className={`calendar-todo-pill${item.priority <= 2 ? " prio-low" : ""}${
+                            item.done ? " done" : ""
+                          }`}
+                        >
+                          {item.title}
+                        </div>
+                      )
+                    )}
+                    {items.length > 3 && (
+                      <div className="calendar-more">+{items.length - 3} more</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        <div style={{ width: 260, flexShrink: 0 }}>
-          <div className="page-header">{format(selectedDay, "EEEE, MMM d")}</div>
-          <form onSubmit={addEvent} style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        <div className="day-panel" style={{ width: 280 }}>
+          <input
+            ref={inputRef}
+            type="date"
+            value={selectedKey}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              const d = new Date(`${e.target.value}T00:00:00`);
+              if (!Number.isNaN(d.getTime())) {
+                setCursor(d);
+                setSelectedDay(d);
+              }
+            }}
+            aria-label="Selected day"
+            style={{ width: "100%", marginBottom: 12, fontWeight: 600 }}
+          />
+
+          <form onSubmit={addEvent} className="add-event-form">
             <input
               type="text"
-              placeholder="Add event…"
+              placeholder={`Add event on ${format(selectedDay, "MMM d")}…`}
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              style={{ flex: 1 }}
+              aria-label="New event title"
             />
-            <button type="submit" className="btn btn-primary">Add</button>
+            <button type="submit" className="btn btn-primary btn-icon" aria-label="Add event">
+              <CalendarPlus size={16} />
+            </button>
           </form>
+
           {selectedEvents.length === 0 && selectedTodos.length === 0 && (
-            <p style={{ color: "var(--ink-faint)", fontSize: 13.5 }}>Nothing on this day.</p>
+            <p style={{ color: "var(--muted)", fontSize: 13.5, textAlign: "center", padding: "18px 0 10px" }}>
+              Nothing planned. Enjoy the open day ✨
+            </p>
           )}
+
           {selectedEvents.length > 0 && (
-            <div className="page-header" style={{ marginBottom: 8 }}>Events</div>
+            <>
+              <div className="day-section-label">Events</div>
+              {selectedEvents.map((ev, i) => (
+                <div key={ev.id} className="day-row" style={{ animationDelay: `${i * 0.05}s` }}>
+                  <span className="grow">{ev.title}</span>
+                  <button
+                    type="button"
+                    className="delete-inline"
+                    style={{ opacity: 1 }}
+                    aria-label={`Delete ${ev.title}`}
+                    onClick={() => removeEvent(ev.id)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </>
           )}
-          {selectedEvents.map((ev) => (
-            <div
-              key={ev.id}
-              className="card"
-              style={{ padding: "8px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}
-            >
-              <span style={{ fontSize: 13.5 }}>{ev.title}</span>
-              <button
-                className="btn btn-icon"
-                onClick={() => removeEvent(ev.id)}
-                style={{ border: "none", background: "transparent" }}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
+
           {selectedTodos.length > 0 && (
             <>
-              <div className="page-header" style={{ margin: "16px 0 8px" }}>Due tasks</div>
-              {selectedTodos.map((t) => (
-                <div
+              <div className="day-section-label">Due tasks</div>
+              {selectedTodos.map((t, i) => (
+                <label
                   key={t.id}
-                  className="card"
-                  style={{ padding: "8px 12px", marginBottom: 8, display: "flex", gap: 8, alignItems: "center", opacity: t.done ? 0.6 : 1 }}
+                  className="day-row"
+                  style={{
+                    animationDelay: `${(selectedEvents.length + i) * 0.05}s`,
+                    cursor: "pointer",
+                    opacity: t.done ? 0.65 : 1,
+                  }}
                 >
                   <input
                     type="checkbox"
@@ -192,17 +280,12 @@ export default function CalendarPage() {
                     onChange={() => toggleTodo(t)}
                     style={{ accentColor: "var(--accent)" }}
                   />
-                  <span
-                    style={{
-                      fontSize: 13.5,
-                      flex: 1,
-                      textDecoration: t.done ? "line-through" : "none",
-                    }}
-                  >
-                    {t.text}
+                  <span className={`grow${t.done ? " done-text" : ""}`}>{t.text}</span>
+                  <span className={`priority-badge p${t.priority}`}>
+                    <span className="dot" />
+                    P{t.priority}
                   </span>
-                  <span className={`priority-badge p${t.priority}`}>P{t.priority}</span>
-                </div>
+                </label>
               ))}
             </>
           )}
