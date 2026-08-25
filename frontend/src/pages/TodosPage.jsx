@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
+import EmptyState from "../components/EmptyState.jsx";
+import ProgressRing from "../components/ProgressRing.jsx";
 
 const PRIORITIES = [
   { value: 1, label: "1 · Low" },
@@ -20,6 +22,22 @@ function formatDue(value) {
 function isOverdue(todo) {
   if (!todo.due_date || todo.done) return false;
   return todo.due_date < new Date().toISOString().slice(0, 10);
+}
+
+function TodoCheck({ checked, onClick }) {
+  return (
+    <button
+      type="button"
+      className={`todo-check${checked ? " checked" : ""}`}
+      onClick={onClick}
+      aria-label={checked ? "Mark as active" : "Mark as complete"}
+      title="Toggle complete"
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M3 8.5l3.5 3.5L13 4.5" pathLength="1" />
+      </svg>
+    </button>
+  );
 }
 
 export default function TodosPage() {
@@ -170,25 +188,37 @@ export default function TodosPage() {
 
   return (
     <div>
-      <div className="todos-hero">
+      <div className="page-header">Tasks</div>
+      <div className="page-title-row">
         <div>
-          <h1>Your todos</h1>
-          <p>Plan, prioritize, and clear your list without the clutter.</p>
+          <h1 className="page-title">Todos</h1>
+          <p className="page-sub">
+            {activeCount === 0 && total > 0
+              ? "All clear — enjoy the calm."
+              : `Plan, prioritize, and clear your list. ${activeCount} active.`}
+          </p>
         </div>
       </div>
 
       <div className="stats-row">
+        <div className="stat-chip ring-card accent">
+          <ProgressRing value={doneCount} max={total} label={`${doneCount} of ${total} done`} />
+          <div>
+            <span className="label" style={{ display: "block", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", fontWeight: 600 }}>
+              Progress
+            </span>
+            <span className="value" style={{ fontSize: "1.15rem" }}>
+              {doneCount} / {total} done
+            </span>
+          </div>
+        </div>
         <div className="stat-chip">
-          <span className="label">Total</span>
+          <span className="label" style={{ display: "block", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", fontWeight: 600 }}>Total</span>
           <span className="value">{total}</span>
         </div>
         <div className="stat-chip warn">
-          <span className="label">Active</span>
+          <span className="label" style={{ display: "block", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", fontWeight: 600 }}>Active</span>
           <span className="value">{activeCount}</span>
-        </div>
-        <div className="stat-chip accent">
-          <span className="label">Done</span>
-          <span className="value">{doneCount}</span>
         </div>
       </div>
 
@@ -366,18 +396,13 @@ export default function TodosPage() {
                     className={`todo-item${todo.done ? " complete" : ""}`}
                     style={{ animationDelay: `${i * 0.04}s` }}
                   >
-                    <button
-                      type="button"
-                      className={`todo-check${todo.done ? " checked" : ""}`}
-                      onClick={() => toggle(todo)}
-                      aria-label={todo.done ? "Mark as active" : "Mark as complete"}
-                      title="Toggle complete"
-                    />
+                    <TodoCheck checked={todo.done} onClick={() => toggle(todo)} />
                     <div className="todo-main">
                       <h3 className="todo-title">{todo.text}</h3>
                       {todo.description && <p className="todo-desc">{todo.description}</p>}
                       <div className="todo-meta">
                         <span className={`priority-badge p${todo.priority}`}>
+                          <span className="dot" />
                           Priority {todo.priority}
                         </span>
                         <span className={`status-pill${todo.done ? " done" : ""}`}>
@@ -402,17 +427,19 @@ export default function TodosPage() {
           )}
 
           {total === 0 && (
-            <div className="empty-state">
-              <h3>No todos yet</h3>
-              <p>Add your first task and start clearing the day.</p>
-            </div>
+            <EmptyState
+              variant="todo"
+              title="No todos yet"
+              hint="Add your first task above and start clearing the day."
+            />
           )}
 
           {total > 0 && visible.length === 0 && (
-            <div className="empty-state">
-              <h3>Nothing matches</h3>
-              <p>Try another filter or search term.</p>
-            </div>
+            <EmptyState
+              variant="search"
+              title="Nothing matches"
+              hint="Try another filter or search term."
+            />
           )}
         </div>
       </div>
