@@ -20,6 +20,9 @@ def _migrate_sqlite_columns():
             "description": "VARCHAR NOT NULL DEFAULT ''",
             "priority": "INTEGER NOT NULL DEFAULT 3",
         },
+        "note": {
+            "pinned": "BOOLEAN NOT NULL DEFAULT 0",
+        },
     }
     with engine.connect() as conn:
         for table, columns in migrations.items():

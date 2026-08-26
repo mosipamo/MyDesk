@@ -11,6 +11,7 @@ class Note(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str = "Untitled"
     content: str = ""  # markdown source
+    pinned: bool = False
     created_at: datetime = Field(default_factory=now)
     updated_at: datetime = Field(default_factory=now)
 

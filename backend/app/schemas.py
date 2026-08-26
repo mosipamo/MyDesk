@@ -6,11 +6,13 @@ from sqlmodel import SQLModel, Field
 class NoteCreate(SQLModel):
     title: str = "Untitled"
     content: str = ""
+    pinned: bool = False
 
 
 class NoteUpdate(SQLModel):
     title: Optional[str] = None
     content: Optional[str] = None
+    pinned: Optional[bool] = None
 
 
 class TodoCreate(SQLModel):

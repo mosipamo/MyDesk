@@ -12,7 +12,9 @@ router = APIRouter(prefix="/api/notes", tags=["notes"])
 
 @router.get("", response_model=List[Note])
 def list_notes(session: Session = Depends(get_session)):
-    return session.exec(select(Note).order_by(Note.updated_at.desc())).all()
+    return session.exec(
+        select(Note).order_by(Note.pinned.desc(), Note.updated_at.desc())
+    ).all()
 
 
 @router.post("", response_model=Note)
