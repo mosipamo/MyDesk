@@ -1,70 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Trash2, Save, FilePlus2, Undo2, Eraser, Pencil, RefreshCw } from "lucide-react";
 import { api } from "../api.js";
+import DrawingThumb, { parseStrokes, paintStrokes } from "../components/DrawingThumb.jsx";
 
 const COLORS = ["#23262b", "#1f6f5c", "#b94a3f", "#d9a32c", "#3a5a9b"];
-
-// Redraws the full stroke list onto a canvas context. Defensive about
-// malformed stroke data (e.g. hand-edited or older saved drawings) so a
-// bad record can't take the whole page down on load.
-// Note: no opaque background is painted here — the canvas stays fully
-// transparent and the paper color comes from CSS. That way eraser strokes
-// (destination-out) reveal clean paper in every theme instead of punching
-// holes through to whatever happens to sit behind the element.
-function paintStrokes(ctx, strokes, width, height) {
-  if (!ctx) return;
-  ctx.clearRect(0, 0, width, height);
-  for (const stroke of strokes || []) {
-    const points = stroke?.points;
-    if (!Array.isArray(points) || points.length < 2) continue;
-    ctx.globalCompositeOperation = stroke.erase
-      ? "destination-out"
-      : "source-over";
-    ctx.strokeStyle = stroke.erase
-      ? "rgba(0,0,0,1)"
-      : stroke.color || "#23262b";
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    for (let i = 1; i < points.length; i++) {
-      const p0 = points[i - 1];
-      const p1 = points[i];
-      if (!p0 || !p1) continue;
-      const pressure = typeof p1.p === "number" ? p1.p : 0.5;
-      ctx.lineWidth = Math.max(1, (stroke.size || 3) * (0.4 + pressure * 1.2));
-      ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y);
-      ctx.lineTo(p1.x, p1.y);
-      ctx.stroke();
-    }
-  }
-  ctx.globalCompositeOperation = "source-over";
-}
-
-function parseStrokes(raw) {
-  try {
-    const data = JSON.parse(raw || "[]");
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-}
-
-function DrawingThumb({ raw }) {
-  const ref = useRef(null);
-  const strokes = useMemo(() => parseStrokes(raw), [raw]);
-
-  useEffect(() => {
-    const c = ref.current;
-    if (!c) return;
-    const ctx = c.getContext("2d");
-    const scale = Math.min(c.width / 760, c.height / 520);
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    paintStrokes(ctx, strokes, 760, 520);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  }, [strokes]);
-
-  return <canvas ref={ref} width={206} height={140} aria-hidden="true" />;
-}
 
 export default function CanvasPage() {
   const canvasRef = useRef(null);
@@ -456,7 +395,7 @@ export default function CanvasPage() {
               className={`drawing-card${d.id === currentId ? " active" : ""}`}
               style={{ animationDelay: `${Math.min(i * 0.05, 0.35)}s` }}
             >
-              <DrawingThumb raw={d.strokes} />
+              <DrawingThumb strokes={parseStrokes(d.strokes)} />
               <div className="drawing-card-meta">
                 <span className="drawing-card-title">{d.title}</span>
                 <button

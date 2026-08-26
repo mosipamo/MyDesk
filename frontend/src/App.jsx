@@ -7,6 +7,7 @@ import CanvasPage from "./pages/CanvasPage.jsx";
 import TodosPage from "./pages/TodosPage.jsx";
 import NotesPage from "./pages/NotesPage.jsx";
 import CalendarPage from "./pages/CalendarPage.jsx";
+import DashboardPage from "./pages/DashboardPage.jsx";
 
 function Boundary({ path, children }) {
   return (
@@ -29,7 +30,8 @@ export default function App() {
       <Sidebar />
       <main className="content" ref={contentRef}>
         <Routes>
-          <Route path="/" element={<Boundary path="/"><div className="page-enter"><CanvasPage /></div></Boundary>} />
+          <Route path="/" element={<Boundary path="/"><div className="page-enter"><DashboardPage /></div></Boundary>} />
+          <Route path="/canvas" element={<Boundary path="/canvas"><div className="page-enter"><CanvasPage /></div></Boundary>} />
           <Route path="/todos" element={<Boundary path="/todos"><div className="page-enter"><TodosPage /></div></Boundary>} />
           <Route path="/notes" element={<Boundary path="/notes"><div className="page-enter"><NotesPage /></div></Boundary>} />
           <Route path="/calendar" element={<Boundary path="/calendar"><div className="page-enter"><CalendarPage /></div></Boundary>} />

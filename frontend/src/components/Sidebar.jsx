@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { PenLine, ListTodo, FileText, CalendarDays, Search } from "lucide-react";
+import { PenLine, ListTodo, FileText, CalendarDays, Search, LayoutDashboard } from "lucide-react";
 import Logo from "./Logo.jsx";
 import ThemeToggle from "./ThemeToggle.jsx";
 
 const links = [
-  { to: "/", label: "Canvas", icon: PenLine, end: true },
+  { to: "/", label: "Home", icon: LayoutDashboard, end: true },
+  { to: "/canvas", label: "Canvas", icon: PenLine },
   { to: "/todos", label: "Todos", icon: ListTodo },
   { to: "/notes", label: "Notes", icon: FileText },
   { to: "/calendar", label: "Calendar", icon: CalendarDays },

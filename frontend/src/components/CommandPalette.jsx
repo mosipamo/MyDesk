@@ -19,9 +19,10 @@ const GROUP_ICONS = {
 };
 
 const PAGE_ITEMS = [
-  { key: "page-canvas", group: "Pages", label: "Canvas", sub: "Drawing board", to: "/" },
+  { key: "page-home", group: "Pages", label: "Home", sub: "Dashboard overview", to: "/" },
+  { key: "page-canvas", group: "Pages", label: "Canvas", sub: "Drawing board", to: "/canvas" },
   { key: "page-todos", group: "Pages", label: "Todos", sub: "Task list", to: "/todos" },
-  { key: "page-notes", group: "Pages", label: "Notes", sub: "Markdown editor", to: "/notes" },
+  { key: "page-notes", group: "Pages", label: "Notes", sub: "Live markdown editor", to: "/notes" },
   { key: "page-calendar", group: "Pages", label: "Calendar", sub: "Month view", to: "/calendar" },
 ];
 
