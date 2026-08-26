@@ -21,6 +21,7 @@ class Todo(SQLModel, table=True):
     text: str
     description: str = ""
     done: bool = False
+    completed_at: Optional[datetime] = None
     priority: int = 3
     due_date: Optional[date] = None
     position: int = 0

@@ -19,6 +19,7 @@ def _migrate_sqlite_columns():
         "todo": {
             "description": "VARCHAR NOT NULL DEFAULT ''",
             "priority": "INTEGER NOT NULL DEFAULT 3",
+            "completed_at": "DATETIME",
         },
         "note": {
             "pinned": "BOOLEAN NOT NULL DEFAULT 0",

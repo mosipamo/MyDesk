@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..database import get_session
-from ..models import Todo
+from ..models import Todo, now
 from ..schemas import TodoCreate, TodoUpdate
 
 router = APIRouter(prefix="/api/todos", tags=["todos"])
@@ -31,6 +31,9 @@ def update_todo(todo_id: int, payload: TodoUpdate, session: Session = Depends(ge
     data = payload.dict(exclude_unset=True)
     for key, value in data.items():
         setattr(todo, key, value)
+    if "done" in data:
+        # Track when work actually happened so the stats page can plot it.
+        todo.completed_at = now() if todo.done else None
     session.add(todo)
     session.commit()
     session.refresh(todo)
