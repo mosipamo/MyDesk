@@ -1,17 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Pencil, Trash2, AlarmClock, ListTodo, CircleDot } from "lucide-react";
 import { api } from "../api.js";
 import EmptyState from "../components/EmptyState.jsx";
 import ProgressRing from "../components/ProgressRing.jsx";
-
-const PRIORITIES = [
-  { value: 1, label: "1 · Low" },
-  { value: 2, label: "2 · Mild" },
-  { value: 3, label: "3 · Normal" },
-  { value: 4, label: "4 · High" },
-  { value: 5, label: "5 · Urgent" },
-];
-
-const emptyForm = { text: "", description: "", priority: 3, due_date: "", done: false };
+import TodoFormModal from "../components/TodoFormModal.jsx";
 
 function formatDue(value) {
   const d = new Date(`${value}T00:00:00`);
@@ -19,9 +11,19 @@ function formatDue(value) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function isOverdue(todo) {
   if (!todo.due_date || todo.done) return false;
-  return todo.due_date < new Date().toISOString().slice(0, 10);
+  return todo.due_date < todayStr();
+}
+
+function overdueDays(todo) {
+  const due = new Date(`${todo.due_date}T00:00:00`).getTime();
+  const now = new Date(`${todayStr()}T00:00:00`).getTime();
+  return Math.max(0, Math.round((now - due) / 86400000));
 }
 
 function TodoCheck({ checked, onClick }) {
@@ -42,14 +44,14 @@ function TodoCheck({ checked, onClick }) {
 
 export default function TodosPage() {
   const [todos, setTodos] = useState([]);
-  const [form, setForm] = useState(emptyForm);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("priority-desc");
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState(emptyForm);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingTodo, setEditingTodo] = useState(null);
+  const notifiedRef = useRef(false);
 
   function showToast(message) {
     setToastMsg(message);
@@ -61,34 +63,20 @@ export default function TodosPage() {
   function refresh() {
     api
       .listTodos()
-      .then(setTodos)
+      .then((list) => {
+        setTodos(list);
+        if (!notifiedRef.current) {
+          notifiedRef.current = true;
+          const overdue = list.filter(isOverdue).length;
+          if (overdue > 0) {
+            showToast(`Heads up — ${overdue} task${overdue > 1 ? "s are" : " is"} overdue`);
+          }
+        }
+      })
       .catch(() => showToast("Could not load todos"));
   }
 
-  useEffect(refresh, []);
-
-  async function addTodo(e) {
-    e.preventDefault();
-    if (!form.text.trim()) {
-      showToast("Give the task a title first");
-      return;
-    }
-    try {
-      await api.createTodo({
-        text: form.text.trim(),
-        description: form.description.trim(),
-        priority: Number(form.priority),
-        due_date: form.due_date || null,
-        position: todos.length,
-      });
-      setForm(emptyForm);
-      refresh();
-      showToast("Todo added");
-    } catch (err) {
-      console.error(err);
-      showToast("Could not add todo");
-    }
-  }
+  useEffect(refresh, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function toggle(todo) {
     const next = !todo.done;
@@ -96,68 +84,42 @@ export default function TodosPage() {
     try {
       await api.updateTodo(todo.id, { done: next });
       showToast(next ? "Marked complete" : "Marked active");
-    } catch (err) {
-      console.error(err);
+    } catch {
       showToast("Could not update status");
       refresh();
     }
   }
 
-  function startEdit(todo) {
-    setEditingId(todo.id);
-    setEditForm({
-      text: todo.text,
-      description: todo.description || "",
-      priority: todo.priority ?? 3,
-      due_date: todo.due_date || "",
-      done: Boolean(todo.done),
-    });
+  function openNew() {
+    setEditingTodo(null);
+    setModalOpen(true);
   }
 
-  function cancelEdit() {
-    setEditingId(null);
-    setEditForm(emptyForm);
-  }
-
-  async function saveEdit(e) {
-    e.preventDefault();
-    if (!editForm.text.trim()) {
-      showToast("Title cannot be empty");
-      return;
-    }
-    try {
-      await api.updateTodo(editingId, {
-        text: editForm.text.trim(),
-        description: editForm.description.trim(),
-        priority: Number(editForm.priority),
-        due_date: editForm.due_date || null,
-        done: editForm.done,
-      });
-      setEditingId(null);
-      refresh();
-      showToast("Todo updated");
-    } catch (err) {
-      console.error(err);
-      showToast("Could not update todo");
-    }
+  function openEdit(todo) {
+    setEditingTodo(todo);
+    setModalOpen(true);
   }
 
   async function remove(todo) {
     if (!window.confirm("Delete this todo? This cannot be undone.")) return;
     try {
       await api.deleteTodo(todo.id);
-      if (editingId === todo.id) cancelEdit();
       refresh();
       showToast("Todo deleted");
-    } catch (err) {
-      console.error(err);
+    } catch {
       showToast("Could not delete todo");
     }
+  }
+
+  function handleSaved(message) {
+    refresh();
+    showToast(message);
   }
 
   const total = todos.length;
   const doneCount = todos.filter((t) => t.done).length;
   const activeCount = total - doneCount;
+  const overdueCount = todos.filter(isOverdue).length;
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -198,27 +160,42 @@ export default function TodosPage() {
               : `Plan, prioritize, and clear your list. ${activeCount} active.`}
           </p>
         </div>
+        <button type="button" className="btn btn-primary" onClick={openNew}>
+          <Plus size={16} />
+          New todo
+        </button>
       </div>
 
-      <div className="stats-row">
+      <div className="stats-row four">
         <div className="stat-chip ring-card accent">
           <ProgressRing value={doneCount} max={total} label={`${doneCount} of ${total} done`} />
           <div>
-            <span className="label" style={{ display: "block", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", fontWeight: 600 }}>
-              Progress
-            </span>
+            <span className="label">Progress</span>
             <span className="value" style={{ fontSize: "1.15rem" }}>
               {doneCount} / {total} done
             </span>
           </div>
         </div>
         <div className="stat-chip">
-          <span className="label" style={{ display: "block", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", fontWeight: 600 }}>Total</span>
-          <span className="value">{total}</span>
+          <span className="stat-icon"><ListTodo size={20} /></span>
+          <div>
+            <span className="label">Total</span>
+            <span className="value">{total}</span>
+          </div>
         </div>
         <div className="stat-chip warn">
-          <span className="label" style={{ display: "block", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", fontWeight: 600 }}>Active</span>
-          <span className="value">{activeCount}</span>
+          <span className="stat-icon"><CircleDot size={20} /></span>
+          <div>
+            <span className="label">Active</span>
+            <span className="value">{activeCount}</span>
+          </div>
+        </div>
+        <div className={`stat-chip danger${overdueCount === 0 ? " calm" : ""}`}>
+          <span className="stat-icon"><AlarmClock size={20} /></span>
+          <div>
+            <span className="label">Overdue</span>
+            <span className="value">{overdueCount}</span>
+          </div>
         </div>
       </div>
 
@@ -228,57 +205,6 @@ export default function TodosPage() {
           <span style={{ color: "var(--muted)", fontSize: 13 }}>{visible.length} shown</span>
         </div>
         <div className="panel-body">
-          <form onSubmit={addTodo} className="todo-form">
-            <div className="form-group span-2">
-              <label htmlFor="new-title">Title</label>
-              <input
-                id="new-title"
-                type="text"
-                className="form-control"
-                placeholder="e.g. Finish project report"
-                value={form.text}
-                onChange={(e) => setForm({ ...form, text: e.target.value })}
-              />
-            </div>
-            <div className="form-group span-2">
-              <label htmlFor="new-description">Description</label>
-              <textarea
-                id="new-description"
-                rows={2}
-                className="form-control"
-                placeholder="What needs to happen?"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="new-priority">Priority</label>
-              <select
-                id="new-priority"
-                className="sort-select form-control"
-                value={form.priority}
-                onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
-              >
-                {PRIORITIES.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label htmlFor="new-due">Due date</label>
-              <input
-                id="new-due"
-                type="date"
-                className="form-control"
-                value={form.due_date}
-                onChange={(e) => setForm({ ...form, due_date: e.target.value })}
-              />
-            </div>
-            <div className="todo-form-actions">
-              <button type="submit" className="btn btn-primary">Add todo</button>
-            </div>
-          </form>
-
           <div className="todo-toolbar">
             <div className="filter-group" role="group" aria-label="Filter todos">
               {[
@@ -320,109 +246,54 @@ export default function TodosPage() {
 
           {visible.length > 0 && (
             <ul className="todo-list">
-              {visible.map((todo, i) =>
-                editingId === todo.id ? (
-                  <li key={todo.id} className="todo-item editing">
-                    <form onSubmit={saveEdit} className="todo-form" style={{ borderBottom: "none", marginBottom: 0, paddingBottom: 0 }}>
-                      <div className="form-group span-2">
-                        <label htmlFor={`edit-title-${todo.id}`}>Title</label>
-                        <input
-                          id={`edit-title-${todo.id}`}
-                          type="text"
-                          className="form-control"
-                          value={editForm.text}
-                          onChange={(e) => setEditForm({ ...editForm, text: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group span-2">
-                        <label htmlFor={`edit-description-${todo.id}`}>Description</label>
-                        <textarea
-                          id={`edit-description-${todo.id}`}
-                          rows={2}
-                          className="form-control"
-                          value={editForm.description}
-                          onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor={`edit-priority-${todo.id}`}>Priority</label>
-                        <select
-                          id={`edit-priority-${todo.id}`}
-                          className="sort-select form-control"
-                          value={editForm.priority}
-                          onChange={(e) => setEditForm({ ...editForm, priority: Number(e.target.value) })}
-                        >
-                          {PRIORITIES.map((p) => (
-                            <option key={p.value} value={p.value}>{p.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor={`edit-due-${todo.id}`}>Due date</label>
-                        <input
-                          id={`edit-due-${todo.id}`}
-                          type="date"
-                          className="form-control"
-                          value={editForm.due_date}
-                          onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group span-2">
-                        <label className="todo-form-inline-check">
-                          <input
-                            type="checkbox"
-                            checked={editForm.done}
-                            onChange={(e) => setEditForm({ ...editForm, done: e.target.checked })}
-                          />
-                          Mark as completed
-                        </label>
-                      </div>
-                      <div className="todo-form-actions">
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={cancelEdit}>
-                          Cancel
-                        </button>
-                        <button type="button" className="btn btn-danger btn-sm" onClick={() => remove(todo)}>
-                          Delete
-                        </button>
-                        <button type="submit" className="btn btn-primary btn-sm">
-                          Save changes
-                        </button>
-                      </div>
-                    </form>
-                  </li>
-                ) : (
-                  <li
-                    key={todo.id}
-                    className={`todo-item${todo.done ? " complete" : ""}`}
-                    style={{ animationDelay: `${i * 0.04}s` }}
-                  >
-                    <TodoCheck checked={todo.done} onClick={() => toggle(todo)} />
-                    <div className="todo-main">
-                      <h3 className="todo-title">{todo.text}</h3>
-                      {todo.description && <p className="todo-desc">{todo.description}</p>}
-                      <div className="todo-meta">
-                        <span className={`priority-badge p${todo.priority}`}>
-                          <span className="dot" />
-                          Priority {todo.priority}
+              {visible.map((todo, i) => (
+                <li
+                  key={todo.id}
+                  className={`todo-item${todo.done ? " complete" : ""}${isOverdue(todo) ? " overdue" : ""}`}
+                  style={{ animationDelay: `${i * 0.04}s` }}
+                >
+                  <TodoCheck checked={todo.done} onClick={() => toggle(todo)} />
+                  <div className="todo-main">
+                    <h3 className="todo-title">{todo.text}</h3>
+                    {todo.description && <p className="todo-desc">{todo.description}</p>}
+                    <div className="todo-meta">
+                      <span className={`priority-badge p${todo.priority}`}>
+                        <span className="dot" />
+                        Priority {todo.priority}
+                      </span>
+                      <span className={`status-pill${todo.done ? " done" : ""}`}>
+                        {todo.done ? "Completed" : "In progress"}
+                      </span>
+                      {todo.due_date && (
+                        <span className={`due-chip${isOverdue(todo) ? " overdue" : ""}`}>
+                          {isOverdue(todo)
+                            ? `${overdueDays(todo)} day${overdueDays(todo) > 1 ? "s" : ""} overdue`
+                            : `Due ${formatDue(todo.due_date)}`}
                         </span>
-                        <span className={`status-pill${todo.done ? " done" : ""}`}>
-                          {todo.done ? "Completed" : "In progress"}
-                        </span>
-                        {todo.due_date && (
-                          <span className={`due-chip${isOverdue(todo) ? " overdue" : ""}`}>
-                            Due {formatDue(todo.due_date)}
-                          </span>
-                        )}
-                      </div>
+                      )}
                     </div>
-                    <div className="todo-actions">
-                      <button type="button" className="btn btn-info btn-sm" onClick={() => startEdit(todo)}>
-                        Edit
-                      </button>
-                    </div>
-                  </li>
-                )
-              )}
+                  </div>
+                  <div className="todo-actions">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => openEdit(todo)}
+                      title="Edit todo"
+                    >
+                      <Pencil size={13} />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm btn-danger-ghost"
+                      onClick={() => remove(todo)}
+                      title="Delete todo"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
 
@@ -430,7 +301,13 @@ export default function TodosPage() {
             <EmptyState
               variant="todo"
               title="No todos yet"
-              hint="Add your first task above and start clearing the day."
+              hint="Add your first task and start clearing the day."
+              action={
+                <button className="btn btn-primary" onClick={openNew}>
+                  <Plus size={15} />
+                  New todo
+                </button>
+              }
             />
           )}
 
@@ -443,6 +320,13 @@ export default function TodosPage() {
           )}
         </div>
       </div>
+
+      <TodoFormModal
+        open={modalOpen}
+        todo={editingTodo}
+        onSaved={handleSaved}
+        onClose={() => setModalOpen(false)}
+      />
 
       <div className={`toast-msg${toastVisible ? " show" : ""}`} role="status">
         {toastMsg}

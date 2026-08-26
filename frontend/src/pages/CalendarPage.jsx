@@ -94,6 +94,7 @@ export default function CalendarPage() {
   }
 
   const selectedKey = format(selectedDay, "yyyy-MM-dd");
+  const today = format(new Date(), "yyyy-MM-dd");
   const selectedEvents = events.filter((e) => e.event_date === selectedKey);
   const selectedTodos = todos
     .filter((t) => t.due_date === selectedKey)
@@ -245,7 +246,8 @@ export default function CalendarPage() {
             <>
               <div className="day-section-label">Events</div>
               {selectedEvents.map((ev, i) => (
-                <div key={ev.id} className="day-row" style={{ animationDelay: `${i * 0.05}s` }}>
+                <div key={ev.id}                   className={`day-row${!t.done && t.due_date < today ? " overdue" : ""}`}
+                  style={{ animationDelay: `${i * 0.05}s` }}>
                   <span className="grow">{ev.title}</span>
                   <button
                     type="button"
@@ -267,7 +269,7 @@ export default function CalendarPage() {
               {selectedTodos.map((t, i) => (
                 <label
                   key={t.id}
-                  className="day-row"
+                  className={`day-row${!t.done && t.due_date < today ? " overdue" : ""}`}
                   style={{
                     animationDelay: `${(selectedEvents.length + i) * 0.05}s`,
                     cursor: "pointer",
