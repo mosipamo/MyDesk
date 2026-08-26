@@ -1,4 +1,4 @@
-export default function ProgressRing({ value, max = 100, size = 58, stroke = 5, label }) {
+export default function ProgressRing({ value, max = 100, size = 58, stroke = 5, label, children }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = max > 0 ? Math.min(value / max, 1) : 0;
@@ -24,7 +24,7 @@ export default function ProgressRing({ value, max = 100, size = 58, stroke = 5, 
           strokeDashoffset={c * (1 - pct)}
         />
       </svg>
-      <span className="ring-label">{Math.round(pct * 100)}%</span>
+      <span className="ring-label">{children ?? `${Math.round(pct * 100)}%`}</span>
     </div>
   );
 }

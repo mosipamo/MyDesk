@@ -8,6 +8,8 @@ import TodosPage from "./pages/TodosPage.jsx";
 import NotesPage from "./pages/NotesPage.jsx";
 import CalendarPage from "./pages/CalendarPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
+import FocusPage from "./pages/FocusPage.jsx";
+import StatsPage from "./pages/StatsPage.jsx";
 
 function Boundary({ path, children }) {
   return (
@@ -35,6 +37,8 @@ export default function App() {
           <Route path="/todos" element={<Boundary path="/todos"><div className="page-enter"><TodosPage /></div></Boundary>} />
           <Route path="/notes" element={<Boundary path="/notes"><div className="page-enter"><NotesPage /></div></Boundary>} />
           <Route path="/calendar" element={<Boundary path="/calendar"><div className="page-enter"><CalendarPage /></div></Boundary>} />
+          <Route path="/focus" element={<Boundary path="/focus"><div className="page-enter"><FocusPage /></div></Boundary>} />
+          <Route path="/stats" element={<Boundary path="/stats"><div className="page-enter"><StatsPage /></div></Boundary>} />
         </Routes>
       </main>
       <CommandPalette />
