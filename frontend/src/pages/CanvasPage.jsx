@@ -7,11 +7,13 @@ const COLORS = ["#23262b", "#1f6f5c", "#b94a3f", "#d9a32c", "#3a5a9b"];
 // Redraws the full stroke list onto a canvas context. Defensive about
 // malformed stroke data (e.g. hand-edited or older saved drawings) so a
 // bad record can't take the whole page down on load.
+// Note: no opaque background is painted here — the canvas stays fully
+// transparent and the paper color comes from CSS. That way eraser strokes
+// (destination-out) reveal clean paper in every theme instead of punching
+// holes through to whatever happens to sit behind the element.
 function paintStrokes(ctx, strokes, width, height) {
   if (!ctx) return;
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#fdfdfb";
-  ctx.fillRect(0, 0, width, height);
   for (const stroke of strokes || []) {
     const points = stroke?.points;
     if (!Array.isArray(points) || points.length < 2) continue;

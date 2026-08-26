@@ -1593,6 +1593,10 @@ input[type="range"]::-moz-range-thumb {
   animation: rise-in 0.45s ease 0.1s both;
 }
 
+.canvas-board > canvas {
+  background: var(--canvas-paper);
+}
+
 .canvas-hint {
   color: var(--muted);
   font-size: 12.5px;
