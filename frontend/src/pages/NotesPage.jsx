@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Star, Sparkles, Code2 } from "lucide-react";
 import { api } from "../api.js";
 import EmptyState from "../components/EmptyState.jsx";
+import LiveMarkdown from "../components/LiveMarkdown.jsx";
+
+const MODE_KEY = "mydesk-notes-mode";
 
 export default function NotesPage() {
   const [searchParams] = useSearchParams();
@@ -12,14 +13,34 @@ export default function NotesPage() {
   const [activeId, setActiveId] = useState(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [saveState, setSaveState] = useState("idle"); // idle | saving | saved
+  const [pinned, setPinned] = useState(false);
+  const [mode, setMode] = useState(
+    () => localStorage.getItem(MODE_KEY) === "source" ? "source" : "live"
+  );
+  const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
   const saveTimer = useRef(null);
   const savedSnapshot = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem(MODE_KEY, mode);
+  }, [mode]);
+
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        setMode((m) => (m === "live" ? "source" : "live"));
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const applyNote = (n) => {
     setActiveId(n.id);
     setTitle(n.title);
     setContent(n.content);
+    setPinned(Boolean(n.pinned));
     savedSnapshot.current = `${n.id}|${n.title}|${n.content}`;
     setSaveState("idle");
   };
@@ -37,6 +58,7 @@ export default function NotesPage() {
           const first = list[0];
           setTitle(first.title);
           setContent(first.content);
+          setPinned(Boolean(first.pinned));
           savedSnapshot.current = `${first.id}|${first.title}|${first.content}`;
           return first.id;
         }
@@ -77,9 +99,28 @@ export default function NotesPage() {
       setActiveId(null);
       setTitle("");
       setContent("");
+      setPinned(false);
       savedSnapshot.current = null;
     }
     refresh();
+  }
+
+  async function togglePin(noteId) {
+    const next = !pinned;
+    setPinned(next);
+    // Reorder locally so pinned notes float to the top without a refetch
+    // (a refetch would clobber in-progress edits).
+    setNotes((prev) => {
+      const flipped = prev.map((n) => (n.id === noteId ? { ...n, pinned: next } : n));
+      const head = flipped.filter((n) => n.pinned);
+      const tail = flipped.filter((n) => !n.pinned);
+      return [...head, ...tail];
+    });
+    try {
+      await api.updateNote(noteId, { pinned: next });
+    } catch {
+      setPinned(!next);
+    }
   }
 
   // Debounced autosave whenever title/content change for the active note.
@@ -115,7 +156,7 @@ export default function NotesPage() {
       <div className="page-title-row">
         <div>
           <h1 className="page-title">Notes</h1>
-          <p className="page-sub">Write in markdown — it saves itself as you type.</p>
+          <p className="page-sub">Live markdown — type it, see it, no separate preview.</p>
         </div>
       </div>
 
@@ -132,6 +173,9 @@ export default function NotesPage() {
               className={`list-row${n.id === activeId ? " active" : ""}`}
               style={{ animationDelay: `${Math.min(i * 0.04, 0.3)}s` }}
             >
+              {n.pinned && (
+                <Star size={12} fill="var(--warn)" color="var(--warn)" className="pin-flag" />
+              )}
               <span className="row-title">{n.title || "Untitled"}</span>
               <button
                 type="button"
@@ -151,8 +195,8 @@ export default function NotesPage() {
         </div>
 
         {activeId ? (
-          <div className="editor-grid">
-            <div className="editor-pane">
+          <div className="editor-column">
+            <div className="editor-topbar">
               <input
                 type="text"
                 value={title}
@@ -161,28 +205,39 @@ export default function NotesPage() {
                 className="title-input"
                 aria-label="Note title"
               />
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Write markdown…"
-                className="card editor-area"
-                style={{ fontFamily: "var(--font-display)" }}
-                aria-label="Note content"
-              />
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginTop: 8,
-                  fontSize: 12.5,
-                  color: "var(--muted)",
-                }}
-              >
-                <span>
-                  {words} word{words === 1 ? "" : "s"} · {content.length} chars
-                </span>
-                <span className={`save-pill${saveState === "saving" ? " saving" : ""}${saveState === "saved" ? " saved" : ""}`}>
+              <div className="editor-tools">
+                <button
+                  type="button"
+                  className={`pin-btn${pinned ? " on" : ""}`}
+                  onClick={() => togglePin(activeId)}
+                  aria-pressed={pinned}
+                  title={pinned ? "Unpin note" : "Pin note to top"}
+                >
+                  <Star size={15} fill={pinned ? "currentColor" : "none"} />
+                </button>
+                <div className="tool-seg" role="group" aria-label="Editor mode">
+                  <button
+                    type="button"
+                    className={mode === "live" ? "active" : ""}
+                    onClick={() => setMode("live")}
+                    title="Live preview (Ctrl+E)"
+                    aria-pressed={mode === "live"}
+                  >
+                    <Sparkles size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className={mode === "source" ? "active" : ""}
+                    onClick={() => setMode("source")}
+                    title="Raw markdown source (Ctrl+E)"
+                    aria-pressed={mode === "source"}
+                  >
+                    <Code2 size={15} />
+                  </button>
+                </div>
+                <span
+                  className={`save-pill${saveState === "saving" ? " saving" : ""}${saveState === "saved" ? " saved" : ""}`}
+                >
                   <span className="save-dot" />
                   {saveState === "saving"
                     ? "Saving…"
@@ -194,10 +249,30 @@ export default function NotesPage() {
                 </span>
               </div>
             </div>
-            <div className="card markdown-preview preview-card">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content || "*Nothing to preview yet.*"}
-              </ReactMarkdown>
+
+            {mode === "live" ? (
+              <LiveMarkdown
+                key={activeId}
+                value={content}
+                onChange={setContent}
+                placeholder="Start writing… markdown works instantly (# heading, **bold**, - list)"
+              />
+            ) : (
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Write markdown…"
+                className="card editor-area source-area"
+                style={{ fontFamily: "var(--font-display)" }}
+                aria-label="Note content"
+              />
+            )}
+
+            <div className="editor-footmeta">
+              <span>
+                {words} word{words === 1 ? "" : "s"} · {content.length} chars ·{" "}
+                <kbd>Ctrl E</kbd> toggles raw view
+              </span>
             </div>
           </div>
         ) : (
