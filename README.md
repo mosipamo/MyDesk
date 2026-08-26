@@ -1,8 +1,9 @@
 # MyDesk
 
-A minimal Notion-style app for yourself: pen/pressure drawing canvas, todo list,
-markdown notes, and a calendar. FastAPI backend (SQLite, one file, zero config),
-React + Vite frontend.
+A personal workspace in the spirit of Notion and Obsidian: a dashboard that
+greets you, pressure-sensitive drawing canvas, todo list, live-preview
+markdown notes, and a calendar. FastAPI backend (SQLite, one file, zero
+config), React + Vite frontend.
 
 ## Run it
 
@@ -24,11 +25,12 @@ Open http://localhost:5173. The Vite dev server proxies `/api/*` to the backend 
 
 ## What's here
 
-- **Canvas** (`/`) — pen/stylus drawing with pressure-sensitive stroke width (falls back to mouse/touch), save/reload named drawings.
-- **Todos** (`/todos`) — titles, descriptions, and priority 1–5; stats row, All/Active/Done filter, search, sorting by priority or title, inline edit with complete/delete, optional due dates.
-- **Notes** (`/notes`) — markdown editor with live preview (autosaves as you type).
-- **Calendar** (`/calendar`) — month grid of events plus todo titles on their due dates; click a day to view/add events and check off tasks due then.
-- **Quick find** (`Ctrl+K` anywhere) — command palette that searches pages, notes, todos, and events; jump straight to a note or the calendar date it belongs to.
+- **Home** (`/`) — dashboard with a greeting, due-today & overdue tasks you can check off inline, this week's events, recent notes, and drawing thumbnails.
+- **Canvas** (`/canvas`) — pen/stylus drawing with pressure-sensitive stroke width (mouse/touch fallback), live thumbnails of saved drawings, `Ctrl+S` save, `Ctrl+Z` undo.
+- **Todos** (`/todos`) — titles, descriptions, priorities 1–5; progress ring, animated checkboxes, All/Active/Done filters, search, sorting, optional due dates.
+- **Notes** (`/notes`) — Obsidian-style **live preview**: type markdown and it renders instantly on the page; syntax characters reveal themselves only on the line you're editing (`Ctrl+E` toggles raw source). Notes autosave as you type and can be pinned to the top.
+- **Calendar** (`/calendar`) — month grid with slide transitions; events plus todo titles on their due dates; click a day to add events or check off tasks.
+- **Quick find** (`Ctrl+K` anywhere) — command palette searching pages, notes, todos, and events.
 
 ## Project layout
 
@@ -42,15 +44,17 @@ backend/
     routers/         one CRUD router per resource
 frontend/
   src/
-    pages/           CanvasPage, TodosPage, NotesPage, CalendarPage
-    components/       Sidebar
+    pages/           DashboardPage, CanvasPage, TodosPage, NotesPage, CalendarPage
+    components/      Sidebar, CommandPalette, LiveMarkdown (live preview engine),
+                     DrawingThumb, EmptyState, ProgressRing, ThemeToggle, Logo,
+                     ErrorBoundary
     api.js            fetch wrapper for the backend
-    index.css          design tokens + layout
+    index.css          design tokens (light/dark themes) + animation library
 ```
 
 ## Extending it
 
 - **Multi-device sync**: swap SQLite for Postgres (change `DATABASE_URL` in `database.py`) and deploy the backend somewhere reachable; the frontend only talks to `/api`, so nothing else changes.
 - **Auth**: everything is currently single-user/open. Add a login and scope queries by user before exposing this beyond localhost.
-- **Drawing thumbnails**: the `Drawing.strokes` field stores raw stroke JSON; you could render a small PNG snapshot on save for nicer list previews.
-- **Rich text in notes**: markdown is stored as plain text in `Note.content`, so it's easy to pipe into other tools or export.
+- **Drawing export**: `Drawing.strokes` stores raw stroke JSON; render it to PNG/SVG server-side for sharing.
+- **Backlinks between notes**: notes are plain markdown, so an `[[wiki-link]]` pass over `Note.content` is all it takes.
