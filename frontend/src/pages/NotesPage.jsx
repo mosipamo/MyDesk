@@ -28,12 +28,14 @@ export default function NotesPage() {
   useEffect(() => {
     function onKey(e) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
+        // Capture phase keeps Chromium from treating Ctrl+E as omnibox search.
         e.preventDefault();
+        e.stopPropagation();
         setMode((m) => (m === "live" ? "source" : "live"));
       }
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
   const applyNote = (n) => {

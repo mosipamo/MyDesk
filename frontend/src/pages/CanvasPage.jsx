@@ -210,16 +210,19 @@ export default function CanvasPage() {
       if (!mod) return;
       const key = e.key.toLowerCase();
       if (key === "s") {
+        // Capture phase: browsers may otherwise reserve these combos.
         e.preventDefault();
+        e.stopPropagation();
         saveRef.current();
       } else if (key === "z" && !e.shiftKey) {
         if (e.target.closest?.("input, textarea, select")) return;
         e.preventDefault();
+        e.stopPropagation();
         undoRef.current();
       }
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
   return (

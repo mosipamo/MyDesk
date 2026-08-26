@@ -8,6 +8,8 @@ import {
   Search,
   CornerDownLeft,
   Compass,
+  Timer,
+  BarChart3,
 } from "lucide-react";
 import { api } from "../api.js";
 
@@ -20,10 +22,12 @@ const GROUP_ICONS = {
 
 const PAGE_ITEMS = [
   { key: "page-home", group: "Pages", label: "Home", sub: "Dashboard overview", to: "/" },
-  { key: "page-canvas", group: "Pages", label: "Canvas", sub: "Drawing board", to: "/canvas" },
+  { key: "page-stats", group: "Pages", label: "Stats", sub: "Productivity plots", to: "/stats" },
   { key: "page-todos", group: "Pages", label: "Todos", sub: "Task list", to: "/todos" },
   { key: "page-notes", group: "Pages", label: "Notes", sub: "Live markdown editor", to: "/notes" },
   { key: "page-calendar", group: "Pages", label: "Calendar", sub: "Month view", to: "/calendar" },
+  { key: "page-canvas", group: "Pages", label: "Canvas", sub: "Drawing board", to: "/canvas" },
+  { key: "page-focus", group: "Pages", label: "Focus", sub: "Pomodoro timer", to: "/focus" },
 ];
 
 export default function CommandPalette() {
@@ -57,20 +61,36 @@ export default function CommandPalette() {
 
   useEffect(() => {
     function onKeydown(e) {
+      // Capture phase + unconditional preventDefault so the browser never
+      // gets a chance to run its own Ctrl+K behaviour (address-bar search,
+      // Edge tab actions, …).
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        e.stopPropagation();
         setOpen((o) => !o);
-      } else if (e.key === "Escape") {
+        return;
+      }
+      if (e.key === "Escape") {
         setOpen(false);
+        return;
+      }
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const typing = e.target?.closest?.(
+          "input, textarea, select, [contenteditable]"
+        );
+        if (!typing) {
+          e.preventDefault();
+          setOpen(true);
+        }
       }
     }
     function onOpenEvent() {
       setOpen(true);
     }
-    window.addEventListener("keydown", onKeydown);
+    window.addEventListener("keydown", onKeydown, true);
     window.addEventListener("cmdk-open", onOpenEvent);
     return () => {
-      window.removeEventListener("keydown", onKeydown);
+      window.removeEventListener("keydown", onKeydown, true);
       window.removeEventListener("cmdk-open", onOpenEvent);
     };
   }, []);
